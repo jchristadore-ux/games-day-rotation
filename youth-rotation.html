@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>Game Day Rotation</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#000;--card:#111;--card2:#1a1a1a;--border:#2a2a2a;--border2:#3a3a3a;
+  --gold:#f0c020;--gold2:#c8a000;--gold3:#f8d84a;
+  --green:#2aaa2a;--white:#fff;--muted:#666;
+  --atk:#ff8c42;--mid:#5bc8f5;--def:#c084fc;
+  --unassigned:#444;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--gold);font-family:'Source Sans 3',sans-serif;font-size:16px;min-height:100vh}
+
+/* HEADER */
+.hdr{background:#000;border-bottom:2px solid var(--gold2);padding:10px 14px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100}
+.hdr-text{flex:1}
+.hdr-title{font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;color:var(--gold);letter-spacing:.5px;text-transform:uppercase}
+.hdr-sub{font-size:10px;color:var(--green);letter-spacing:2px;text-transform:uppercase}
+.hdr-pill{background:var(--card2);border:1.5px solid var(--gold2);border-radius:8px;padding:4px 10px;text-align:center;flex-shrink:0}
+.hdr-pill .num{font-family:'Oswald',sans-serif;font-size:18px;color:var(--gold);display:block;line-height:1}
+.hdr-pill .lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+
+/* NAV */
+.nav{display:flex;background:#000;border-bottom:1px solid var(--border2);position:sticky;top:66px;z-index:99}
+.nav-tab{flex:1;padding:13px 4px;background:none;border:none;color:var(--muted);font-family:'Oswald',sans-serif;font-size:14px;font-weight:600;letter-spacing:1px;cursor:pointer;text-transform:uppercase;border-bottom:3px solid transparent;margin-bottom:-1px;transition:color .15s,border-color .15s}
+.nav-tab.active{color:var(--gold);border-bottom-color:var(--gold)}
+
+/* PAGES */
+.page{display:none;padding:12px;padding-bottom:30px}
+.page.active{display:block}
+
+/* COUNTER BAR */
+.counter-bar{display:flex;gap:8px;margin-bottom:12px}
+.ctr-box{flex:1;background:var(--card);border:1px solid var(--border2);border-radius:10px;padding:8px;text-align:center}
+.ctr-box .cv{font-family:'Oswald',sans-serif;font-size:22px;display:block;line-height:1;margin-bottom:2px}
+.ctr-box .cl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+.ctr-box.needs .cv{color:#ff7777}
+.ctr-box.ok .cv{color:var(--green)}
+.ctr-box.cv-mid{color:var(--mid)}
+.ctr-box.cv-atk{color:var(--atk)}
+.ctr-box.cv-def{color:var(--def)}
+
+/* NOTE */
+.note{background:var(--card);border:1px solid var(--border2);border-radius:10px;padding:11px 14px;font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px}
+.note strong{color:var(--gold)}
+
+/* BUILD BUTTON */
+.build-btn{width:100%;padding:18px;background:var(--gold);border:none;border-radius:12px;color:#000;font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;letter-spacing:2px;cursor:pointer;margin-bottom:4px;transition:background .15s,transform .1s;display:none}
+.build-btn.show{display:block}
+.build-btn:active{background:var(--gold3);transform:scale(.98)}
+
+/* WARN */
+.warn{background:rgba(255,60,60,.08);border:1px solid rgba(255,60,60,.4);border-radius:10px;padding:11px 14px;font-size:14px;color:#ff7777;margin-bottom:10px;line-height:1.5}
+
+/* PLAYER ROWS */
+.player-row{display:flex;align-items:center;gap:10px;padding:11px 12px;background:var(--card);border:1px solid var(--border2);border-radius:10px;margin-bottom:7px;min-height:60px;transition:background .12s}
+.player-row.absent{opacity:.35;border-color:#1a1a1a;background:transparent}
+.absent-btn{width:26px;height:26px;border-radius:6px;border:2px solid var(--gold2);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;color:#000;cursor:pointer;user-select:none;transition:background .12s}
+.player-row:not(.absent) .absent-btn{background:var(--gold);border-color:var(--gold)}
+.player-row.absent .absent-btn{background:transparent;border-color:#444}
+.pname{font-family:'Oswald',sans-serif;font-size:19px;font-weight:600;color:var(--white);flex:1;min-width:0}
+.player-row.absent .pname{color:var(--muted);text-decoration:line-through}
+
+/* POSITION SELECTOR - three pill buttons per row */
+.pos-btns{display:flex;gap:5px;flex-shrink:0}
+.pos-btn{padding:6px 10px;border-radius:6px;font-family:'Oswald',sans-serif;font-size:12px;font-weight:700;letter-spacing:.5px;cursor:pointer;user-select:none;border:1.5px solid var(--border2);background:transparent;color:var(--muted);transition:all .15s}
+.pos-btn:active{transform:scale(.92)}
+.pos-btn.sel-mid{background:rgba(91,200,245,.18);border-color:var(--mid);color:var(--mid)}
+.pos-btn.sel-atk{background:rgba(255,140,66,.18);border-color:var(--atk);color:var(--atk)}
+.pos-btn.sel-def{background:rgba(192,132,252,.18);border-color:var(--def);color:var(--def)}
+.player-row.absent .pos-btn{pointer-events:none;opacity:.4}
+.pos-btn.sel-gk{background:rgba(240,192,0,.2);border-color:var(--gold);color:var(--gold)}
+.ctr-box.cv-gk .cv{color:var(--gold)}
+
+/* SHIFTS */
+.stats-strip{display:flex;gap:7px;margin-bottom:12px}
+.stat-box{background:var(--card);border:1px solid var(--border2);border-radius:10px;padding:9px 8px;flex:1;text-align:center}
+.stat-box .sv{font-family:'Oswald',sans-serif;font-size:19px;display:block;line-height:1;margin-bottom:1px}
+.stat-box .sl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+.sched-list{display:flex;flex-direction:column;gap:8px}
+.shift-card{background:var(--card);border:1px solid var(--border2);border-radius:12px;overflow:hidden}
+.shift-card.special{border-color:var(--gold2)}
+.shift-hdr{background:#000;padding:10px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border2)}
+.shift-card.special .shift-hdr{border-bottom-color:var(--gold2)}
+.shift-clock{font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;color:var(--gold)}
+.shift-note{font-family:'Oswald',sans-serif;font-size:11px;color:var(--green);letter-spacing:1px;margin-left:auto;text-transform:uppercase}
+.badge{font-size:11px;background:var(--gold2);color:#000;border-radius:4px;padding:2px 9px;font-weight:700;font-family:'Oswald',sans-serif;letter-spacing:1px}
+.shift-body{padding:11px 14px;display:flex;flex-direction:column;gap:7px}
+.pos-row{display:flex;align-items:center;gap:10px}
+.pos-lbl{font-family:'Oswald',sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;min-width:40px;flex-shrink:0}
+.chips-wrap{display:flex;flex-wrap:wrap;gap:5px}
+.pchip{padding:5px 11px;border-radius:6px;font-size:14px;font-weight:700}
+.chip-atk{background:rgba(255,140,66,.12);color:var(--atk);border:1px solid rgba(255,140,66,.45)}
+.chip-mid{background:rgba(91,200,245,.1);color:var(--mid);border:1px solid rgba(91,200,245,.45)}
+.chip-def{background:rgba(192,132,252,.1);color:var(--def);border:1px solid rgba(192,132,252,.45)}
+.chip-atk-new{background:rgba(255,140,66,.28);color:var(--atk);border:2px solid var(--atk);font-weight:800}
+.chip-mid-new{background:rgba(91,200,245,.25);color:var(--mid);border:2px solid var(--mid);font-weight:800}
+.chip-def-new{background:rgba(192,132,252,.25);color:var(--def);border:2px solid var(--def);font-weight:800}
+.new-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-left:4px;vertical-align:middle}
+.half-divider{text-align:center;padding:10px 0;font-family:'Oswald',sans-serif;font-size:13px;color:var(--gold);letter-spacing:4px;border-top:1px solid var(--gold2);border-bottom:1px solid var(--gold2);margin:2px 0}
+
+/* TIME TAB */
+.pt-list{display:flex;flex-direction:column;gap:9px}
+.pt-row{display:flex;flex-direction:column;gap:5px}
+.pt-top{display:flex;align-items:center;gap:8px}
+.pt-name{font-family:'Oswald',sans-serif;font-size:18px;color:var(--white);flex:1}
+.pt-mins{font-family:'Oswald',sans-serif;font-size:16px;color:var(--gold);min-width:58px;text-align:right}
+.pt-bar-bg{height:10px;background:#1a1a1a;border-radius:5px;overflow:hidden}
+.pt-bar-fill{height:100%;border-radius:5px}
+
+/* EMPTY */
+.empty{text-align:center;padding:40px 16px;color:var(--muted);font-size:15px;line-height:1.8}
+.empty .ico{font-size:42px;margin-bottom:10px}
+
+/* FOOTER BUTTONS */
+.btn-row{display:flex;gap:10px;margin-top:10px}
+.act-btn{flex:1;padding:14px;border-radius:12px;font-family:'Oswald',sans-serif;font-size:17px;letter-spacing:1px;cursor:pointer;text-align:center;font-weight:600;border:none}
+.btn-gold{background:var(--gold);color:#000}
+.btn-gold:active{background:var(--gold3)}
+.btn-outline{background:var(--card2);border:1.5px solid var(--gold2);color:var(--gold)}
+.btn-outline:active{background:#222}
+
+/* OVERLAY */
+.overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:#fff;z-index:9999;overflow-y:auto;display:none}
+.overlay.show{display:block}
+.ov-bar{background:#1a5c1a;color:#f0c020;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:1}
+.ov-bar h2{margin:0;font-size:16px;font-family:'Oswald',sans-serif;letter-spacing:1px}
+.ov-close{background:#f0c020;color:#000;border:none;border-radius:8px;padding:8px 16px;font-size:15px;font-weight:700;cursor:pointer;font-family:'Oswald',sans-serif}
+.ov-hint{background:#e8f5e8;border-bottom:2px solid #1a5c1a;padding:12px 16px;font-size:14px;color:#1a3a1a;text-align:center;line-height:1.5}
+.ov-body{padding:16px;font-family:Arial,sans-serif;font-size:10pt;color:#000}
+.ov-body h3{font-size:10pt;font-weight:700;color:#f0c020;background:#1a5c1a;padding:4px 9px;margin:12px 0 5px;letter-spacing:1px}
+.ov-body table{border-collapse:collapse;width:100%;margin-bottom:6px}
+.ov-body th{background:#1a5c1a;color:#f0c020;padding:5px 7px;text-align:left;font-size:9pt;letter-spacing:1px}
+.ov-body td{padding:5px 7px;border-bottom:1px solid #ddd;font-size:10pt;vertical-align:top}
+.ov-body tr:nth-child(even) td{background:#f4f8f4}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <svg style="height:44px;width:auto;flex-shrink:0" viewBox="0 0 50 44" xmlns="http://www.w3.org/2000/svg">
+    <rect width="50" height="44" rx="6" fill="#1a5c1a"/>
+    <line x1="8" y1="7" x2="42" y2="37" stroke="#000" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="42" y1="7" x2="8" y2="37" stroke="#000" stroke-width="2.5" stroke-linecap="round"/>
+    <ellipse cx="10" cy="8" rx="6" ry="4" fill="none" stroke="#f0c020" stroke-width="1.4"/>
+    <ellipse cx="40" cy="8" rx="6" ry="4" fill="none" stroke="#f0c020" stroke-width="1.4"/>
+    <text x="25" y="30" font-family="Arial Black,sans-serif" font-size="12" font-weight="900" fill="#f0c020" text-anchor="middle">GD</text>
+  </svg>
+  <div class="hdr-text">
+    <div class="hdr-title">Game Day</div>
+    <div class="hdr-sub">Rotation Manager</div>
+  </div>
+  <div class="hdr-pill">
+    <span class="num" id="activeCount">18</span>
+    <span class="lbl">Active</span>
+  </div>
+</div>
+
+<div class="nav">
+  <button class="nav-tab active" onclick="showPage('roster',this)">ROSTER</button>
+  <button class="nav-tab" onclick="showPage('shifts',this)">SHIFTS</button>
+  <button class="nav-tab" onclick="showPage('time',this)">TIME</button>
+</div>
+
+<!-- ROSTER TAB -->
+<div class="page active" id="page-roster">
+  <div class="note">
+    Tap <strong>MID / ATK / DEF / GK</strong> to assign each girl a position. Tap the checkmark to mark absent. When all spots are filled (3 mid, 2 atk, 2 def, 1 gk), tap <strong>Build Rotation</strong>.
+  </div>
+
+  <div class="counter-bar">
+    <div class="ctr-box" id="ctr-mid">
+      <span class="cv cv-mid" id="cnt-mid">0</span>
+      <span class="cl">MID (3+)</span>
+    </div>
+    <div class="ctr-box" id="ctr-atk">
+      <span class="cv cv-atk" id="cnt-atk">0</span>
+      <span class="cl">ATK (2+)</span>
+    </div>
+    <div class="ctr-box" id="ctr-def">
+      <span class="cv cv-def" id="cnt-def">0</span>
+      <span class="cl">DEF (2+)</span>
+    </div>
+    <div class="ctr-box cv-gk" id="ctr-gk">
+      <span class="cv" id="cnt-gk">0</span>
+      <span class="cl">GK (need 1)</span>
+    </div>
+  </div>
+
+  <div id="warnArea"></div>
+  <button class="build-btn" id="buildBtn" onclick="generate()">BUILD ROTATION</button>
+  <div id="roster-list"></div>
+</div>
+
+<!-- SHIFTS TAB -->
+<div class="page" id="page-shifts">
+  <div id="shifts-content">
+    <div class="empty"><div class="ico">&#9898;</div>Assign positions in Roster tab<br>then tap Build Rotation</div>
+  </div>
+</div>
+
+<!-- TIME TAB -->
+<div class="page" id="page-time">
+  <div id="time-content">
+    <div class="empty"><div class="ico">&#128202;</div>Build your rotation first</div>
+  </div>
+</div>
+
+<!-- PRINT OVERLAY -->
+<div id="printOverlay" class="overlay">
+  <div class="ov-bar">
+    <h2>Game Day Rotation</h2>
+    <button class="ov-close" onclick="closeOverlay()">&#x2715; CLOSE</button>
+  </div>
+  <div class="ov-hint">&#128247; iPhone: tap <strong>Share</strong> (box+arrow) at the bottom of Safari, then tap <strong>Print</strong></div>
+  <div class="ov-body" id="overlayBody"></div>
+</div>
+
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+var TOTAL = 40;
+var HALF  = 20;
+var FORM  = {middie:3, attack:2, defense:2};
+
+// ============================================================
+// ROSTER - no preset positions; coach assigns each game
+// ============================================================
+var ROSTER = [
+  'Aurora','Ava','Chloe','Clara','Fiona','Harper','Kelsey',
+  'Mackenzie B','Mackenzie H','Maevyn','Melanie','Mikalia',
+  'Presley','Rosie','Sadie','Shea','Stella','Winnie'
+];
+
+// State: position assigned this game (null = unassigned)
+var playerPos    = {};   // name -> 'middie'|'attack'|'defense'|null
+var absent       = {};   // name -> true
+var PLAN         = null;
+
+// Init positions to null
+for(var i=0;i<ROSTER.length;i++) playerPos[ROSTER[i]] = null;
+
+// ============================================================
+// HELPERS
+// ============================================================
+function showPage(id, btn) {
+  var pages = document.querySelectorAll('.page');
+  var tabs  = document.querySelectorAll('.nav-tab');
+  for(var i=0;i<pages.length;i++) pages[i].classList.remove('active');
+  for(var i=0;i<tabs.length;i++)  tabs[i].classList.remove('active');
+  document.getElementById('page-'+id).classList.add('active');
+  btn.classList.add('active');
+}
+
+function fmt(t) {
+  var m = Math.floor(t + 0.0001);
+  var s = Math.round((t + 0.0001 - m) * 60);
+  return m + ':' + (s < 10 ? '0' : '') + s;
+}
+
+function isAbsent(name)  { return absent[name] === true; }
+function posOf(name)     { return playerPos[name] || null; }
+
+// ============================================================
+// ROSTER RENDERING
+// ============================================================
+function renderRoster() {
+  var container = document.getElementById('roster-list');
+  while(container.firstChild) container.removeChild(container.firstChild);
+
+  for(var i=0;i<ROSTER.length;i++) {
+    container.appendChild(makePlayerRow(ROSTER[i]));
+  }
+  updateCounters();
+  updateBuildBtn();
+  document.getElementById('activeCount').textContent =
+    ROSTER.filter(function(n){ return !isAbsent(n); }).length;
+}
+
+function makePlayerRow(name) {
+  var ab  = isAbsent(name);
+  var pos = posOf(name);
+
+  var row = document.createElement('div');
+  row.className = 'player-row' + (ab ? ' absent' : '');
+
+  // Absent toggle (checkmark)
+  var chk = document.createElement('div');
+  chk.className = 'absent-btn';
+  chk.textContent = ab ? '' : 'OK';
+  chk.addEventListener('click', function() { toggleAbsent(name); });
+  row.appendChild(chk);
+
+  // Name
+  var nameEl = document.createElement('span');
+  nameEl.className = 'pname';
+  nameEl.textContent = name;
+  row.appendChild(nameEl);
+
+  // Position buttons: MID ATK DEF
+  var btns = document.createElement('div');
+  btns.className = 'pos-btns';
+
+  var POS_CONFIG = [
+    {pos:'middie',  key:'mid', label:'MID'},
+    {pos:'attack',  key:'atk', label:'ATK'},
+    {pos:'defense', key:'def', label:'DEF'},
+    {pos:'goalie',  key:'gk',  label:'GK'}
+  ];
+
+  for(var j=0;j<POS_CONFIG.length;j++) {
+    (function(cfg) {
+      var btn = document.createElement('button');
+      btn.className = 'pos-btn' + (pos===cfg.pos ? ' sel-'+cfg.key : '');
+      btn.textContent = cfg.label;
+      btn.addEventListener('click', function() { assignPos(name, cfg.pos); });
+      btns.appendChild(btn);
+    })(POS_CONFIG[j]);
+  }
+
+  row.appendChild(btns);
+  return row;
+}
+
+function toggleAbsent(name) {
+  if(isAbsent(name)) {
+    delete absent[name];
+  } else {
+    absent[name] = true;
+    // Keep their position assignment - coach may re-mark present
+  }
+  renderRoster();
+}
+
+function assignPos(name, pos) {
+  // Toggle: tap same position = unassign; tap different = reassign
+  if(playerPos[name] === pos) {
+    playerPos[name] = null;
+  } else {
+    playerPos[name] = pos;
+  }
+  renderRoster();
+}
+
+// ============================================================
+// COUNTERS & BUILD BUTTON
+// ============================================================
+function countPos(pos) {
+  var n = 0;
+  for(var i=0;i<ROSTER.length;i++) {
+    if(!isAbsent(ROSTER[i]) && playerPos[ROSTER[i]]===pos) n++;
+  }
+  return n;
+}
+
+function updateCounters() {
+  var POS  = ['middie','attack','defense','goalie'];
+  var NEED = {middie:3, attack:2, defense:2, goalie:1};
+  var KEYS = {middie:'mid', attack:'atk', defense:'def', goalie:'gk'};
+  var XCLS = {middie:'', attack:'', defense:'', goalie:' cv-gk'};
+  for(var i=0;i<POS.length;i++) {
+    var pos = POS[i];
+    var n   = countPos(pos);
+    var el  = document.getElementById('cnt-'+KEYS[pos]);
+    var box = document.getElementById('ctr-'+KEYS[pos]);
+    if(!el||!box) continue;
+    el.textContent = n;
+    box.className = 'ctr-box'+XCLS[pos] + (n >= NEED[pos] ? ' ok' : ' needs');
+  }
+}
+
+function updateBuildBtn() {
+  var ready = countPos('middie')  >= FORM.middie
+           && countPos('attack')  >= FORM.attack
+           && countPos('defense') >= FORM.defense
+           && countPos('goalie')  >= 1;
+  var btn = document.getElementById('buildBtn');
+  btn.className = 'build-btn' + (ready ? ' show' : '');
+}
+
+// ============================================================
+// ROTATION ENGINE
+// ============================================================
+function buildRRIntervals(names, slots) {
+  var N = names.length;
+  if(N <= slots) return [{tS:0, tE:TOTAL, on:names.slice(), newIns:[]}];
+
+  var interval = TOTAL / N;
+  var field    = names.slice(0, slots);
+  var bench    = names.slice(slots);
+  var ivs      = [];
+
+  for(var i=0;i<N;i++) {
+    var tS   = Math.round(i*interval*1000)/1000;
+    var tE   = Math.round(Math.min((i+1)*interval, TOTAL)*1000)/1000;
+    var newI = (i===0) ? [] : [field[field.length-1]];
+    ivs.push({tS:tS, tE:tE, on:field.slice(), newIns:newI});
+    if(i<N-1) {
+      var out=field.shift(); var inn=bench.shift();
+      bench.push(out); field.push(inn);
+    }
+  }
+  return ivs;
+}
+
+function buildMidIntervals(names) {
+  var N = names.length;
+  var K = FORM.middie;
+  if(N <= K) return [{tS:0, tE:TOTAL, on:names.slice(), newIns:[]}];
+  if(N === 2*K) {
+    var gA = names.slice(0, K);
+    var gB = names.slice(K);
+    return [
+      {tS: 0, tE:10, on:gA.slice(), newIns:[]},
+      {tS:10, tE:20, on:gB.slice(), newIns:gB.slice()},
+      {tS:20, tE:30, on:gA.slice(), newIns:gA.slice()},
+      {tS:30, tE:40, on:gB.slice(), newIns:gB.slice()}
+    ];
+  }
+  return buildRRIntervals(names, K);
+}
+
+function ivAt(ivs, t) {
+  for(var i=ivs.length-1; i>=0; i--) {
+    if(t >= ivs[i].tS - 0.001) return ivs[i];
+  }
+  return ivs[0];
+}
+
+// ============================================================
+// GENERATE
+// ============================================================
+function generate() {
+  document.getElementById('warnArea').innerHTML = '';
+
+  var avail = ROSTER.filter(function(n){ return !isAbsent(n); });
+
+  var midNames = avail.filter(function(n){ return playerPos[n]==='middie'; });
+  var atkNames = avail.filter(function(n){ return playerPos[n]==='attack'; });
+  var defNames = avail.filter(function(n){ return playerPos[n]==='defense'; });
+  var gkNames  = avail.filter(function(n){ return playerPos[n]==='goalie'; });
+
+  // Validate
+  var warns = [];
+  if(midNames.length < FORM.middie)  warns.push('Need at least '+FORM.middie+' midfielders - only '+midNames.length+' assigned.');
+  if(atkNames.length < FORM.attack)  warns.push('Need at least '+FORM.attack+' attackers - only '+atkNames.length+' assigned.');
+  if(defNames.length < FORM.defense) warns.push('Need at least '+FORM.defense+' defenders - only '+defNames.length+' assigned.');
+  if(gkNames.length  < 1)            warns.push('Need at least 1 goalkeeper - none assigned.');
+
+  if(warns.length) {
+    var html='';
+    for(var i=0;i<warns.length;i++) html+='<div class="warn">'+warns[i]+'</div>';
+    document.getElementById('warnArea').innerHTML=html;
+    return;
+  }
+
+  // Build intervals per position
+  // Goalies: if 1 goalie plays full game; if 2+ rotate halves; if 3+ round-robin
+  var gkIvs;
+  if(gkNames.length === 1) {
+    gkIvs = [{tS:0, tE:TOTAL, on:gkNames.slice(), newIns:[]}];
+  } else if(gkNames.length === 2) {
+    gkIvs = [
+      {tS: 0, tE:HALF, on:[gkNames[0]], newIns:[]},
+      {tS:HALF, tE:TOTAL, on:[gkNames[1]], newIns:[gkNames[1]]}
+    ];
+  } else {
+    gkIvs = buildRRIntervals(gkNames, 1);
+  }
+  var midIvs = buildMidIntervals(midNames);
+  var atkIvs = buildRRIntervals(atkNames, FORM.attack);
+  var defIvs = buildRRIntervals(defNames, FORM.defense);
+
+  // Collect all time breakpoints
+  var timeSet = {};
+  timeSet[0]=true; timeSet[TOTAL]=true;
+  var allIvs = [midIvs, atkIvs, defIvs, gkIvs];
+  for(var i=0;i<allIvs.length;i++) {
+    for(var j=0;j<allIvs[i].length;j++) {
+      timeSet[allIvs[i][j].tS]=true;
+      timeSet[allIvs[i][j].tE]=true;
+    }
+  }
+  var times = Object.keys(timeSet).map(Number).sort(function(a,b){return a-b;});
+
+  // Build snapshots
+  var snapshots = [];
+  for(var i=0;i<times.length-1;i++) {
+    var tS  = times[i];
+    var tE  = times[i+1];
+    var mIv = ivAt(midIvs, tS);
+    var aIv = ivAt(atkIvs, tS);
+    var dIv = ivAt(defIvs, tS);
+
+    // Who just came on at tS?
+    var newIns = {};
+    if(tS > 0) {
+      var all3 = [midIvs, atkIvs, defIvs, gkIvs];
+      for(var ii=0;ii<all3.length;ii++) {
+        var iv = ivAt(all3[ii], tS);
+        if(Math.abs(iv.tS - tS) < 0.01) {
+          for(var kk=0;kk<iv.newIns.length;kk++) newIns[iv.newIns[kk]]=true;
+        }
+      }
+    }
+
+    var gkIv = ivAt(gkIvs, tS);
+    snapshots.push({
+      tS:     tS,
+      tE:     tE,
+      mid:    mIv.on.slice(),
+      atk:    aIv.on.slice(),
+      def:    dIv.on.slice(),
+      gk:     gkIv.on.slice(),
+      newIns: Object.keys(newIns),
+      isKO:   tS===0
+    });
+  }
+
+  // Compute minutes
+  var mins = {};
+  for(var i=0;i<avail.length;i++) mins[avail[i]] = 0;
+  for(var i=0;i<snapshots.length;i++) {
+    var dur = snapshots[i].tE - snapshots[i].tS;
+    var on  = snapshots[i].mid.concat(snapshots[i].atk, snapshots[i].def, snapshots[i].gk);
+    for(var j=0;j<on.length;j++) {
+      if(mins[on[j]] !== undefined) mins[on[j]] += dur;
+    }
+  }
+
+  PLAN = {
+    snapshots: snapshots,
+    midNames:  midNames,
+    atkNames:  atkNames,
+    defNames:  defNames,
+    gkNames:   gkNames,
+    mins:      mins,
+    avail:     avail
+  };
+
+  renderShifts();
+  renderTime();
+
+  // Switch to shifts tab
+  var navTabs = document.querySelectorAll('.nav-tab');
+  var pages   = document.querySelectorAll('.page');
+  for(var i=0;i<navTabs.length;i++) navTabs[i].classList.remove('active');
+  for(var i=0;i<pages.length;i++)   pages[i].classList.remove('active');
+  document.getElementById('page-shifts').classList.add('active');
+  navTabs[1].classList.add('active');
+}
+
+// ============================================================
+// RENDER SHIFTS
+// ============================================================
+function renderShifts() {
+  var snapshots = PLAN.snapshots;
+  var mins      = PLAN.mins;
+  var avail     = PLAN.avail;
+  var midNames  = PLAN.midNames;
+  var atkNames  = PLAN.atkNames;
+  var defNames  = PLAN.defNames;
+
+  var avg = 0, keys = Object.keys(mins);
+  for(var i=0;i<keys.length;i++) avg += mins[keys[i]];
+  avg = avg / avail.length;
+
+  var gkNames  = PLAN.gkNames;
+  var mN = midNames.length, aN = atkNames.length, dN = defNames.length, gN = gkNames.length;
+  var mMin = mN<=FORM.middie  ? '40.0' : (TOTAL*FORM.middie /mN).toFixed(1);
+  var aMin = aN<=FORM.attack  ? '40.0' : (TOTAL*FORM.attack /aN).toFixed(1);
+  var dMin = dN<=FORM.defense ? '40.0' : (TOTAL*FORM.defense/dN).toFixed(1);
+  var gMin = gN<=1 ? '40.0' : (TOTAL/gN).toFixed(1);
+
+  var html = '<div class="stats-strip">'
+    +'<div class="stat-box"><span class="sv" style="color:var(--mid)">'+mMin+'m</span><span class="sl">Each MID</span></div>'
+    +'<div class="stat-box"><span class="sv" style="color:var(--atk)">'+aMin+'m</span><span class="sl">Each ATK</span></div>'
+    +'<div class="stat-box"><span class="sv" style="color:var(--def)">'+dMin+'m</span><span class="sl">Each DEF</span></div>'
+    +'<div class="stat-box"><span class="sv" style="color:var(--gold)">'+gMin+'m</span><span class="sl">Each GK</span></div>'
+    +'</div><div class="sched-list">';
+
+  var shownHalf = false;
+  for(var si=0;si<snapshots.length;si++) {
+    var snap     = snapshots[si];
+    var newSet   = {};
+    for(var i=0;i<snap.newIns.length;i++) newSet[snap.newIns[i]]=true;
+    var subCount = snap.newIns.length;
+    var isHT     = Math.abs(snap.tS-HALF)<0.05;
+    var isKO     = snap.isKO;
+
+    if(!shownHalf && snap.tS>=HALF) {
+      html += '<div class="half-divider">HALFTIME</div>';
+      shownHalf = true;
+    }
+
+    function chipRow(players, base, newCls) {
+      var out='';
+      for(var i=0;i<players.length;i++) {
+        var n=players[i], cls=newSet[n]?newCls:base;
+        var dot=newSet[n]?'<span class="new-dot"></span>':'';
+        out+='<span class="pchip '+cls+'">'+n+dot+'</span> ';
+      }
+      return out;
+    }
+
+    html += '<div class="shift-card'+(isKO||isHT?' special':'')+'"><div class="shift-hdr">'
+      +'<span class="shift-clock">'+fmt(snap.tS)+' - '+fmt(snap.tE)+'</span>'
+      +(isKO?'<span class="badge">KICKOFF</span>':'')
+      +(isHT?'<span class="badge">HALFTIME</span>':'')
+      +(subCount>0&&!isKO?'<span class="shift-note">'+subCount+' sub'+(subCount>1?'s':'')+' in</span>':'')
+      +'</div><div class="shift-body">'
+      +'<div class="pos-row"><span class="pos-lbl" style="color:var(--mid)">MID</span><div class="chips-wrap">'+chipRow(snap.mid,'chip-mid','chip-mid-new')+'</div></div>'
+      +'<div class="pos-row"><span class="pos-lbl" style="color:var(--atk)">ATK</span><div class="chips-wrap">'+chipRow(snap.atk,'chip-atk','chip-atk-new')+'</div></div>'
+      +'<div class="pos-row"><span class="pos-lbl" style="color:var(--def)">DEF</span><div class="chips-wrap">'+chipRow(snap.def,'chip-def','chip-def-new')+'</div></div>'
+      +'<div class="pos-row"><span class="pos-lbl" style="color:var(--gold)">GK</span><div class="chips-wrap">'+chipRow(snap.gk||[],'chip-mid','chip-mid-new')+'</div></div>'
+      +'</div></div>';
+  }
+
+  html += '</div><div class="btn-row">'
+    +'<button class="act-btn btn-gold" onclick="doPrint()">Print / PDF</button>'
+    +'<button class="act-btn btn-outline" onclick="copyText()">Copy</button>'
+    +'</div>';
+
+  document.getElementById('shifts-content').innerHTML = html;
+}
+
+// ============================================================
+// RENDER TIME
+// ============================================================
+function renderTime() {
+  var mins     = PLAN.mins;
+  var avail    = PLAN.avail;
+  var maxM     = 0, keys = Object.keys(mins);
+  for(var i=0;i<keys.length;i++) if(mins[keys[i]]>maxM) maxM=mins[keys[i]];
+  if(maxM===0) maxM=1;
+  var avg=0; for(var i=0;i<keys.length;i++) avg+=mins[keys[i]];
+  avg=avg/avail.length;
+
+  // Sort by position then name
+  var posOrd = {middie:0, attack:1, defense:2, goalie:3};
+  var entries = [];
+  for(var i=0;i<keys.length;i++) entries.push([keys[i], mins[keys[i]]]);
+  entries.sort(function(a,b){
+    var pa=playerPos[a[0]]||'middie', pb=playerPos[b[0]]||'middie';
+    var po=(posOrd[pa]||0)-(posOrd[pb]||0);
+    return po!==0?po:a[0].localeCompare(b[0]);
+  });
+
+  var html='<div class="note">Equal time within each position group. Avg: <strong>'+avg.toFixed(1)+' min</strong></div><div class="pt-list">';
+  var lastPos=null;
+  for(var i=0;i<entries.length;i++) {
+    var name=entries[i][0], m=entries[i][1];
+    var pos=playerPos[name]||'middie';
+    if(pos!==lastPos) {
+      var lbl=pos==='middie'?'MIDFIELD':pos==='attack'?'ATTACK':pos==='defense'?'DEFENSE':'GOALKEEPER';
+      var col=pos==='middie'?'var(--mid)':pos==='attack'?'var(--atk)':pos==='defense'?'var(--def)':'var(--gold)';
+      html+='<div style="font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2px;color:'+col+';padding:8px 0 4px;border-bottom:1px solid var(--border2);margin-top:'+(lastPos?'10px':'0')+'">'+lbl+'</div>';
+      lastPos=pos;
+    }
+    var pc=pos==='middie'?'var(--mid)':pos==='attack'?'var(--atk)':pos==='defense'?'var(--def)':'var(--gold)';
+    html+='<div class="pt-row"><div class="pt-top"><span class="pt-name" style="color:'+pc+'">'+name+'</span><span class="pt-mins">'+m.toFixed(1)+' min</span></div>'
+      +'<div class="pt-bar-bg"><div class="pt-bar-fill" style="width:'+(m/maxM*100).toFixed(1)+'%;background:'+pc+';opacity:.82"></div></div></div>';
+  }
+  html+='</div>';
+  document.getElementById('time-content').innerHTML=html;
+}
+
+// ============================================================
+// PRINT OVERLAY
+// ============================================================
+function closeOverlay() {
+  document.getElementById('printOverlay').classList.remove('show');
+}
+
+function doPrint() {
+  if(!PLAN){alert('Build rotation first!');return;}
+  var snapshots=PLAN.snapshots, mins=PLAN.mins, avail=PLAN.avail;
+  var midNames=PLAN.midNames, atkNames=PLAN.atkNames, defNames=PLAN.defNames;
+
+  var avg=0, keys=Object.keys(mins);
+  for(var i=0;i<keys.length;i++) avg+=mins[keys[i]];
+  avg=avg/avail.length;
+  var maxM=0; for(var i=0;i<keys.length;i++) if(mins[keys[i]]>maxM) maxM=mins[keys[i]];
+  var now=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+
+  var gkNames=PLAN.gkNames;
+  var mN=midNames.length, aN=atkNames.length, dN=defNames.length, gN=gkNames.length;
+  var mMin=mN<=FORM.middie  ?'40.0':(TOTAL*FORM.middie /mN).toFixed(1);
+  var aMin=aN<=FORM.attack  ?'40.0':(TOTAL*FORM.attack /aN).toFixed(1);
+  var dMin=dN<=FORM.defense ?'40.0':(TOTAL*FORM.defense/dN).toFixed(1);
+  var gMin=gN<=1?'40.0':(TOTAL/gN).toFixed(1);
+
+  var th='padding:5px 7px;text-align:left;background:#1a5c1a;color:#f0c020;font-size:9pt;letter-spacing:1px';
+  var shownHalf=false, rotHTML='';
+
+  for(var si=0;si<snapshots.length;si++) {
+    var snap=snapshots[si];
+    if(!shownHalf&&snap.tS>=HALF){
+      rotHTML+='<tr><td colspan="4" style="background:#fffbe0;text-align:center;font-weight:700;color:#b08000;padding:6px;letter-spacing:2px;border-top:2px solid #c8a000;border-bottom:2px solid #c8a000">HALFTIME</td></tr>';
+      shownHalf=true;
+    }
+
+    // Who came IN and who went OUT
+    var ns={};
+    for(var i=0;i<snap.newIns.length;i++) ns[snap.newIns[i]]=true;
+    var prevSnap = si>0?snapshots[si-1]:null;
+    var outsAtk=[], outsMid=[], outsDef=[], outsGk=[];
+    if(prevSnap&&!snap.isKO){
+      for(var i=0;i<prevSnap.atk.length;i++) if(snap.atk.indexOf(prevSnap.atk[i])===-1) outsAtk.push(prevSnap.atk[i]);
+      for(var i=0;i<prevSnap.mid.length;i++) if(snap.mid.indexOf(prevSnap.mid[i])===-1) outsMid.push(prevSnap.mid[i]);
+      for(var i=0;i<prevSnap.def.length;i++) if(snap.def.indexOf(prevSnap.def[i])===-1) outsDef.push(prevSnap.def[i]);
+      var pg=prevSnap.gk||[]; var sg=snap.gk||[];
+      for(var i=0;i<pg.length;i++) if(sg.indexOf(pg[i])===-1) outsGk.push(pg[i]);
+    }
+
+    var fn=function(onArr,outArr,col){
+      var parts=[];
+      for(var i=0;i<onArr.length;i++){
+        var n=onArr[i];
+        if(ns[n]){var s=document.createElement('b');s.style.color=col;s.style.textDecoration='underline';s.textContent=n+' IN';parts.push(s.outerHTML);}
+        else parts.push(n);
+      }
+      for(var i=0;i<outArr.length;i++){
+        var s=document.createElement('span');s.style.color='#aaa';s.style.textDecoration='line-through';
+        s.textContent=outArr[i]+' OUT';parts.push(s.outerHTML);
+      }
+      return parts.join(', ');
+    };
+
+    var sub=snap.isKO?'Kickoff':snap.newIns.length?snap.newIns.length+' sub'+(snap.newIns.length>1?'s':''):'';
+    rotHTML+='<tr style="background:'+(si%2===0?'#fff':'#f4f8f4')+'"><td style="padding:5px 7px;white-space:nowrap;font-weight:700;color:#1a5c1a;font-size:10pt">'
+      +fmt(snap.tS)+'-'+fmt(snap.tE)+(sub?'<br><small style="color:#888;font-weight:400">'+sub+'</small>':'')
+      +'</td>'
+      +'<td style="padding:5px 7px;font-size:10pt">'+fn(snap.mid,outsMid,'#0a70a0')+'</td>'
+      +'<td style="padding:5px 7px;font-size:10pt">'+fn(snap.atk,outsAtk,'#c05010')+'</td>'
+      +'<td style="padding:5px 7px;font-size:10pt">'+fn(snap.def,outsDef,'#6020a0')+'</td>'
+      +'<td style="padding:5px 7px;font-size:10pt">'+fn(snap.gk||[],outsGk,'#b08000')+'</td></tr>';
+  }
+
+  // Playing time table
+  var posOrd={middie:0,attack:1,defense:2,goalie:3};
+  var ptE=[];
+  for(var i=0;i<keys.length;i++) ptE.push([keys[i],mins[keys[i]]]);
+  ptE.sort(function(a,b){
+    var pa=playerPos[a[0]]||'middie', pb=playerPos[b[0]]||'middie';
+    var po=(posOrd[pa]||0)-(posOrd[pb]||0);
+    return po!==0?po:a[0].localeCompare(b[0]);
+  });
+  var ptHTML='';
+  for(var i=0;i<ptE.length;i++){
+    var name=ptE[i][0], m=ptE[i][1];
+    var pos=playerPos[name]||'middie';
+    var col=pos==='middie'?'#0a70a0':pos==='attack'?'#c05010':pos==='defense'?'#6020a0':'#b08000';
+    var lbl=pos==='middie'?'MID':pos==='attack'?'ATK':pos==='defense'?'DEF':'GK';
+    ptHTML+='<tr style="background:'+(i%2===0?'#fff':'#f4f8f4')+'"><td style="padding:5px 7px;font-size:11pt"><b>'+name+'</b></td>'
+      +'<td style="padding:5px 7px;color:'+col+';font-weight:700">'+lbl+'</td>'
+      +'<td style="padding:5px 7px;font-size:11pt"><b>'+m.toFixed(1)+'</b> min</td>'
+      +'<td style="padding:5px 7px"><div style="width:'+Math.round(m/maxM*90)+'px;height:9px;background:'+col+';border-radius:3px;opacity:.75"></div></td></tr>';
+  }
+
+  document.getElementById('overlayBody').innerHTML=
+    '<div style="border-bottom:2px solid #1a5c1a;padding-bottom:8px;margin-bottom:10px">'
+    +'<div style="font-size:14pt;font-weight:900;color:#1a5c1a">GAME DAY ROTATION</div>'
+    +'<div style="font-size:9pt;color:#555">'+now+' - '+avail.length+' players - MID '+mMin+'m - ATK '+aMin+'m - DEF '+dMin+'m - GK '+gMin+'m - Avg '+avg.toFixed(1)+'m</div></div>'
+    +'<h3>FIELD ROTATION (underline IN, strikethrough OUT)</h3>'
+    +'<table><thead><tr><th style="'+th+'">TIME</th><th style="'+th+'">MIDFIELD</th><th style="'+th+'">ATTACK</th><th style="'+th+'">DEFENSE</th><th style="'+th+'">GK</th></tr></thead>'
+    +'<tbody>'+rotHTML+'</tbody></table>'
+    +'<h3 style="margin-top:14px">PLAYING TIME</h3>'
+    +'<table><thead><tr><th style="'+th+'">PLAYER</th><th style="'+th+'">POS</th><th style="'+th+'">MIN</th><th style="'+th+'">BAR</th></tr></thead>'
+    +'<tbody>'+ptHTML+'</tbody></table>'
+    +'<p style="font-size:7pt;color:#888;margin-top:10px;border-top:1px solid #ddd;padding-top:6px">Game Day Rotation Manager - Equal time per position group - Avg: '+avg.toFixed(1)+' min</p>';
+
+  document.getElementById('printOverlay').classList.add('show');
+}
+
+function copyText() {
+  if(!PLAN){alert('Build rotation first!');return;}
+  var snapshots=PLAN.snapshots, mins=PLAN.mins;
+  var t='GAME DAY ROTATION\n\n';
+  for(var i=0;i<snapshots.length;i++){
+    var s=snapshots[i];
+    t+=fmt(s.tS)+' - '+fmt(s.tE)+'\n';
+    t+='  MID: '+s.mid.join(', ')+'\n';
+    t+='  ATK: '+s.atk.join(', ')+'\n';
+    t+='  DEF: '+s.def.join(', ')+'\n';
+    t+='  GK: '+(s.gk||[]).join(', ')+'\n\n';
+  }
+  t+='PLAYING TIME\n';
+  var keys=Object.keys(mins).sort(function(a,b){return mins[b]-mins[a];});
+  for(var i=0;i<keys.length;i++) t+=keys[i]+': '+mins[keys[i]].toFixed(1)+' min\n';
+  navigator.clipboard.writeText(t).then(function(){alert('Copied!');});
+}
+
+// ============================================================
+// INIT
+// ============================================================
+renderRoster();
+</script>
+</body>
+</html>
