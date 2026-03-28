@@ -195,6 +195,9 @@ html,body{background:var(--bg);color:var(--gold);font-family:'Source Sans 3',san
   <div id="warnArea"></div>
   <button class="build-btn" id="buildBtn" onclick="generate()">BUILD ROTATION</button>
   <div id="roster-list"></div>
+  <div class="btn-row" style="margin-top:6px">
+    <button class="act-btn btn-outline" onclick="clearSavedPositions()">CLEAR SAVED POSITIONS</button>
+  </div>
 </div>
 
 <!-- SHIFTS TAB -->
@@ -345,6 +348,38 @@ function assignPos(name, pos) {
   } else {
     playerPos[name] = pos;
   }
+  savePositions();
+  renderRoster();
+}
+
+// ============================================================
+// POSITION PERSISTENCE (localStorage)
+// ============================================================
+var LS_KEY = 'gameday_positions';
+
+function savePositions() {
+  var data = {};
+  for(var i=0;i<ROSTER.length;i++) {
+    if(playerPos[ROSTER[i]]) data[ROSTER[i]] = playerPos[ROSTER[i]];
+  }
+  localStorage.setItem(LS_KEY, JSON.stringify(data));
+}
+
+function loadPositions() {
+  try {
+    var raw = localStorage.getItem(LS_KEY);
+    if(!raw) return;
+    var data = JSON.parse(raw);
+    for(var i=0;i<ROSTER.length;i++) {
+      var name = ROSTER[i];
+      if(data[name]) playerPos[name] = data[name];
+    }
+  } catch(e) { /* ignore corrupt / missing data */ }
+}
+
+function clearSavedPositions() {
+  localStorage.removeItem(LS_KEY);
+  for(var i=0;i<ROSTER.length;i++) playerPos[ROSTER[i]] = null;
   renderRoster();
 }
 
@@ -800,6 +835,7 @@ function copyText() {
 // ============================================================
 // INIT
 // ============================================================
+loadPositions();
 renderRoster();
 </script>
 </body>
