@@ -56,10 +56,16 @@ html,body{background:var(--bg);color:var(--gold);font-family:'Source Sans 3',san
 .player-row{display:flex;align-items:center;gap:10px;padding:11px 12px;background:var(--card);border:1px solid var(--border2);border-radius:10px;margin-bottom:7px;min-height:60px;transition:background .12s}
 .player-row.absent{opacity:.35;border-color:#1a1a1a;background:transparent}
 .absent-btn{width:26px;height:26px;border-radius:6px;border:2px solid var(--gold2);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;color:#000;cursor:pointer;user-select:none;transition:background .12s}
-.player-row:not(.absent) .absent-btn{background:var(--gold);border-color:var(--gold)}
+.player-row:not(.absent):not(.unconfirmed) .absent-btn{background:var(--gold);border-color:var(--gold)}
 .player-row.absent .absent-btn{background:transparent;border-color:#444}
 .pname{font-family:'Oswald',sans-serif;font-size:19px;font-weight:600;color:var(--white);flex:1;min-width:0}
 .player-row.absent .pname{color:var(--muted);text-decoration:line-through}
+
+/* UNCONFIRMED STATE */
+.player-row.unconfirmed{background:rgba(240,192,32,.06);border-color:rgba(240,192,32,.35)}
+.player-row.unconfirmed .absent-btn{background:transparent;border-color:var(--gold);color:var(--gold);font-weight:700;font-size:15px}
+.player-row.unconfirmed .pname{color:var(--gold);font-style:italic}
+.player-row.unconfirmed .pos-btn{pointer-events:none;opacity:.4}
 
 /* POSITION SELECTOR - three pill buttons per row */
 .pos-btns{display:flex;gap:5px;flex-shrink:0}
@@ -71,6 +77,13 @@ html,body{background:var(--bg);color:var(--gold);font-family:'Source Sans 3',san
 .player-row.absent .pos-btn{pointer-events:none;opacity:.4}
 .pos-btn.sel-gk{background:rgba(240,192,0,.2);border-color:var(--gold);color:var(--gold)}
 .ctr-box.cv-gk .cv{color:var(--gold)}
+
+/* DUAL ROTATION LABELS */
+.rotation-label{font-family:'Oswald',sans-serif;font-size:16px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:12px 14px;border-radius:10px;margin-bottom:10px;text-align:center;line-height:1.4}
+.rotation-label.label-a{background:rgba(255,60,60,.1);border:1.5px solid rgba(255,60,60,.5);color:#ff7777}
+.rotation-label.label-b{background:rgba(42,170,42,.1);border:1.5px solid rgba(42,170,42,.5);color:var(--green)}
+.rotation-label .rl-sub{font-size:11px;color:var(--muted);font-weight:400;letter-spacing:.5px;display:block;margin-top:2px}
+.rotation-divider{border:none;border-top:2px dashed var(--gold2);margin:20px 0}
 
 /* SHIFTS */
 .stats-strip{display:flex;gap:7px;margin-bottom:12px}
@@ -167,7 +180,7 @@ html,body{background:var(--bg);color:var(--gold);font-family:'Source Sans 3',san
 <!-- ROSTER TAB -->
 <div class="page active" id="page-roster">
   <div class="note">
-    Tap <strong>MID / ATK / DEF / GK</strong> to assign each girl a position. Tap the checkmark to mark absent. When all spots are filled (3 mid, 2 atk, 2 def, 1 gk), tap <strong>Build Rotation</strong>.
+    Tap <strong>MID / ATK / DEF / GK</strong> to assign each girl a position. Tap the status button to cycle: <strong>OK</strong> (present) &rarr; <strong>?</strong> (unconfirmed) &rarr; absent. When all spots are filled (3 mid, 2 atk, 2 def, 1 gk), tap <strong>Build Rotation</strong>.
   </div>
 
   <div class="counter-bar">
@@ -246,7 +259,10 @@ var ROSTER = [
 // State: position assigned this game (null = unassigned)
 var playerPos    = {};   // name -> 'middie'|'attack'|'defense'|null
 var absent       = {};   // name -> true
+var unconfirmed  = {};   // name -> true  (NEW: unconfirmed availability)
 var PLAN         = null;
+var PLAN_B       = null; // NEW: second plan when unconfirmed players exist
+var UNCONF_NAMES = [];   // NEW: names of unconfirmed players for labeling
 
 // Init positions to null
 for(var i=0;i<ROSTER.length;i++) playerPos[ROSTER[i]] = null;
@@ -269,8 +285,9 @@ function fmt(t) {
   return m + ':' + (s < 10 ? '0' : '') + s;
 }
 
-function isAbsent(name)  { return absent[name] === true; }
-function posOf(name)     { return playerPos[name] || null; }
+function isAbsent(name)      { return absent[name] === true; }
+function isUnconfirmed(name) { return unconfirmed[name] === true; }
+function posOf(name)         { return playerPos[name] || null; }
 
 // ============================================================
 // ROSTER RENDERING
@@ -283,22 +300,37 @@ function renderRoster() {
     container.appendChild(makePlayerRow(ROSTER[i]));
   }
   updateCounters();
-  document.getElementById('activeCount').textContent =
-    ROSTER.filter(function(n){ return !isAbsent(n); }).length;
+
+  // Update header pill: show "14+3?" format when unconfirmed exist
+  var confirmed = ROSTER.filter(function(n){ return !isAbsent(n) && !isUnconfirmed(n); }).length;
+  var unconfCount = ROSTER.filter(function(n){ return isUnconfirmed(n); }).length;
+  var pillEl = document.getElementById('activeCount');
+  if(unconfCount > 0) {
+    pillEl.textContent = confirmed + '+' + unconfCount + '?';
+  } else {
+    pillEl.textContent = confirmed;
+  }
 }
 
 function makePlayerRow(name) {
-  var ab  = isAbsent(name);
-  var pos = posOf(name);
+  var ab    = isAbsent(name);
+  var unc   = isUnconfirmed(name);
+  var pos   = posOf(name);
 
   var row = document.createElement('div');
-  row.className = 'player-row' + (ab ? ' absent' : '');
+  row.className = 'player-row' + (ab ? ' absent' : '') + (unc ? ' unconfirmed' : '');
 
-  // Absent toggle (checkmark)
+  // Status toggle: OK -> ? -> absent -> OK
   var chk = document.createElement('div');
   chk.className = 'absent-btn';
-  chk.textContent = ab ? '' : 'OK';
-  chk.addEventListener('click', function() { toggleAbsent(name); });
+  if(ab) {
+    chk.textContent = '';
+  } else if(unc) {
+    chk.textContent = '?';
+  } else {
+    chk.textContent = 'OK';
+  }
+  chk.addEventListener('click', function() { cycleStatus(name); });
   row.appendChild(chk);
 
   // Name
@@ -332,11 +364,19 @@ function makePlayerRow(name) {
   return row;
 }
 
-function toggleAbsent(name) {
+// NEW: 3-state cycle replacing toggleAbsent
+function cycleStatus(name) {
   if(isAbsent(name)) {
+    // Absent -> Present
     delete absent[name];
-  } else {
+    delete unconfirmed[name];
+  } else if(isUnconfirmed(name)) {
+    // Unconfirmed -> Absent
+    delete unconfirmed[name];
     absent[name] = true;
+  } else {
+    // Present -> Unconfirmed
+    unconfirmed[name] = true;
   }
   renderRoster();
 }
@@ -383,12 +423,12 @@ function clearSavedPositions() {
 }
 
 // ============================================================
-// COUNTERS
+// COUNTERS (only count confirmed present players)
 // ============================================================
 function countPos(pos) {
   var n = 0;
   for(var i=0;i<ROSTER.length;i++) {
-    if(!isAbsent(ROSTER[i]) && playerPos[ROSTER[i]]===pos) n++;
+    if(!isAbsent(ROSTER[i]) && !isUnconfirmed(ROSTER[i]) && playerPos[ROSTER[i]]===pos) n++;
   }
   return n;
 }
@@ -410,7 +450,7 @@ function updateCounters() {
 }
 
 // ============================================================
-// ROTATION ENGINE
+// ROTATION ENGINE (untouched)
 // ============================================================
 function buildRRIntervals(names, slots) {
   var N = names.length;
@@ -459,13 +499,11 @@ function ivAt(ivs, t) {
 }
 
 // ============================================================
-// GENERATE
+// COMPUTE ROTATION (extracted from generate - same algorithm)
+// Takes an array of available player names, returns a PLAN object
+// or {error: [...]} if validation fails
 // ============================================================
-function generate() {
-  document.getElementById('warnArea').innerHTML = '';
-
-  var avail = ROSTER.filter(function(n){ return !isAbsent(n); });
-
+function computeRotation(avail) {
   var midNames = avail.filter(function(n){ return playerPos[n]==='middie'; });
   var atkNames = avail.filter(function(n){ return playerPos[n]==='attack'; });
   var defNames = avail.filter(function(n){ return playerPos[n]==='defense'; });
@@ -478,12 +516,7 @@ function generate() {
   if(defNames.length < FORM.defense) warns.push('Need at least '+FORM.defense+' defenders - only '+defNames.length+' assigned.');
   if(gkNames.length  < 1)            warns.push('Need at least 1 goalkeeper - none assigned.');
 
-  if(warns.length) {
-    var html='';
-    for(var i=0;i<warns.length;i++) html+='<div class="warn">'+warns[i]+'</div>';
-    document.getElementById('warnArea').innerHTML=html;
-    return;
-  }
+  if(warns.length) return {error: warns};
 
   // Build intervals per position
   var gkIvs;
@@ -558,7 +591,7 @@ function generate() {
     }
   }
 
-  PLAN = {
+  return {
     snapshots: snapshots,
     midNames:  midNames,
     atkNames:  atkNames,
@@ -567,6 +600,63 @@ function generate() {
     mins:      mins,
     avail:     avail
   };
+}
+
+// ============================================================
+// GENERATE (now uses computeRotation, runs twice if unconfirmed)
+// ============================================================
+function generate() {
+  document.getElementById('warnArea').innerHTML = '';
+
+  // Confirmed present players (not absent, not unconfirmed)
+  var confirmedAvail = ROSTER.filter(function(n){ return !isAbsent(n) && !isUnconfirmed(n); });
+  // Unconfirmed players
+  UNCONF_NAMES = ROSTER.filter(function(n){ return isUnconfirmed(n); });
+  var hasUnconfirmed = UNCONF_NAMES.length > 0;
+
+  if(hasUnconfirmed) {
+    // --- DUAL ROTATION MODE ---
+    // Plan A: unconfirmed treated as absent (confirmed only)
+    var availA = confirmedAvail.slice();
+    var planA  = computeRotation(availA);
+
+    // Plan B: unconfirmed treated as present (confirmed + unconfirmed)
+    var availB = confirmedAvail.concat(UNCONF_NAMES);
+    var planB  = computeRotation(availB);
+
+    // Check for errors in both plans
+    var allWarns = [];
+    if(planA.error) {
+      for(var i=0;i<planA.error.length;i++) allWarns.push('Rotation A (without ' + UNCONF_NAMES.join(', ') + '): ' + planA.error[i]);
+    }
+    if(planB.error) {
+      for(var i=0;i<planB.error.length;i++) allWarns.push('Rotation B (with ' + UNCONF_NAMES.join(', ') + '): ' + planB.error[i]);
+    }
+    if(allWarns.length) {
+      var html='';
+      for(var i=0;i<allWarns.length;i++) html+='<div class="warn">'+allWarns[i]+'</div>';
+      document.getElementById('warnArea').innerHTML=html;
+      return;
+    }
+
+    PLAN   = planA;
+    PLAN_B = planB;
+
+  } else {
+    // --- SINGLE ROTATION MODE (original behavior) ---
+    var avail = confirmedAvail.slice();
+    var result = computeRotation(avail);
+
+    if(result.error) {
+      var html='';
+      for(var i=0;i<result.error.length;i++) html+='<div class="warn">'+result.error[i]+'</div>';
+      document.getElementById('warnArea').innerHTML=html;
+      return;
+    }
+
+    PLAN   = result;
+    PLAN_B = null;
+  }
 
   renderShifts();
   renderTime();
@@ -581,21 +671,21 @@ function generate() {
 }
 
 // ============================================================
-// RENDER SHIFTS
+// BUILD SHIFTS HTML FOR ONE PLAN (extracted from renderShifts)
 // ============================================================
-function renderShifts() {
-  var snapshots = PLAN.snapshots;
-  var mins      = PLAN.mins;
-  var avail     = PLAN.avail;
-  var midNames  = PLAN.midNames;
-  var atkNames  = PLAN.atkNames;
-  var defNames  = PLAN.defNames;
+function buildShiftsHTML(plan) {
+  var snapshots = plan.snapshots;
+  var mins      = plan.mins;
+  var avail     = plan.avail;
+  var midNames  = plan.midNames;
+  var atkNames  = plan.atkNames;
+  var defNames  = plan.defNames;
 
   var avg = 0, keys = Object.keys(mins);
   for(var i=0;i<keys.length;i++) avg += mins[keys[i]];
   avg = avg / avail.length;
 
-  var gkNames  = PLAN.gkNames;
+  var gkNames  = plan.gkNames;
   var mN = midNames.length, aN = atkNames.length, dN = defNames.length, gN = gkNames.length;
   var mMin = mN<=FORM.middie  ? '40.0' : (TOTAL*FORM.middie /mN).toFixed(1);
   var aMin = aN<=FORM.attack  ? '40.0' : (TOTAL*FORM.attack /aN).toFixed(1);
@@ -646,7 +736,29 @@ function renderShifts() {
       +'</div></div>';
   }
 
-  html += '</div><div class="btn-row">'
+  html += '</div>';
+  return html;
+}
+
+// ============================================================
+// RENDER SHIFTS (now supports dual plans)
+// ============================================================
+function renderShifts() {
+  var html = '';
+
+  if(PLAN_B) {
+    // DUAL MODE
+    html += '<div class="rotation-label label-a">Rotation A &mdash; If Unconfirmed Absent<span class="rl-sub">Without: ' + UNCONF_NAMES.join(', ') + ' &bull; ' + PLAN.avail.length + ' players</span></div>';
+    html += buildShiftsHTML(PLAN);
+    html += '<hr class="rotation-divider">';
+    html += '<div class="rotation-label label-b">Rotation B &mdash; If Unconfirmed Present<span class="rl-sub">With: ' + UNCONF_NAMES.join(', ') + ' &bull; ' + PLAN_B.avail.length + ' players</span></div>';
+    html += buildShiftsHTML(PLAN_B);
+  } else {
+    // SINGLE MODE (original)
+    html += buildShiftsHTML(PLAN);
+  }
+
+  html += '<div class="btn-row">'
     +'<button class="act-btn btn-gold" onclick="doPrint()">Print / PDF</button>'
     +'<button class="act-btn btn-outline" onclick="copyText()">Copy</button>'
     +'</div>';
@@ -655,11 +767,11 @@ function renderShifts() {
 }
 
 // ============================================================
-// RENDER TIME
+// BUILD TIME HTML FOR ONE PLAN (extracted from renderTime)
 // ============================================================
-function renderTime() {
-  var mins     = PLAN.mins;
-  var avail    = PLAN.avail;
+function buildTimeHTML(plan) {
+  var mins     = plan.mins;
+  var avail    = plan.avail;
   var maxM     = 0, keys = Object.keys(mins);
   for(var i=0;i<keys.length;i++) if(mins[keys[i]]>maxM) maxM=mins[keys[i]];
   if(maxM===0) maxM=1;
@@ -692,7 +804,26 @@ function renderTime() {
       +'<div class="pt-bar-bg"><div class="pt-bar-fill" style="width:'+(m/maxM*100).toFixed(1)+'%;background:'+pc+';opacity:.82"></div></div></div>';
   }
   html+='</div>';
-  document.getElementById('time-content').innerHTML=html;
+  return html;
+}
+
+// ============================================================
+// RENDER TIME (now supports dual plans)
+// ============================================================
+function renderTime() {
+  var html = '';
+
+  if(PLAN_B) {
+    html += '<div class="rotation-label label-a">Rotation A &mdash; If Unconfirmed Absent<span class="rl-sub">Without: ' + UNCONF_NAMES.join(', ') + '</span></div>';
+    html += buildTimeHTML(PLAN);
+    html += '<hr class="rotation-divider">';
+    html += '<div class="rotation-label label-b">Rotation B &mdash; If Unconfirmed Present<span class="rl-sub">With: ' + UNCONF_NAMES.join(', ') + '</span></div>';
+    html += buildTimeHTML(PLAN_B);
+  } else {
+    html += buildTimeHTML(PLAN);
+  }
+
+  document.getElementById('time-content').innerHTML = html;
 }
 
 // ============================================================
@@ -702,18 +833,17 @@ function closeOverlay() {
   document.getElementById('printOverlay').classList.remove('show');
 }
 
-function doPrint() {
-  if(!PLAN){alert('Build rotation first!');return;}
-  var snapshots=PLAN.snapshots, mins=PLAN.mins, avail=PLAN.avail;
-  var midNames=PLAN.midNames, atkNames=PLAN.atkNames, defNames=PLAN.defNames;
+// Build print HTML for one plan (extracted from doPrint)
+function buildPrintHTML(plan, label) {
+  var snapshots=plan.snapshots, mins=plan.mins, avail=plan.avail;
+  var midNames=plan.midNames, atkNames=plan.atkNames, defNames=plan.defNames;
 
   var avg=0, keys=Object.keys(mins);
   for(var i=0;i<keys.length;i++) avg+=mins[keys[i]];
   avg=avg/avail.length;
   var maxM=0; for(var i=0;i<keys.length;i++) if(mins[keys[i]]>maxM) maxM=mins[keys[i]];
-  var now=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
 
-  var gkNames=PLAN.gkNames;
+  var gkNames=plan.gkNames;
   var mN=midNames.length, aN=atkNames.length, dN=defNames.length, gN=gkNames.length;
   var mMin=mN<=FORM.middie  ?'40.0':(TOTAL*FORM.middie /mN).toFixed(1);
   var aMin=aN<=FORM.attack  ?'40.0':(TOTAL*FORM.attack /aN).toFixed(1);
@@ -726,11 +856,10 @@ function doPrint() {
   for(var si=0;si<snapshots.length;si++) {
     var snap=snapshots[si];
     if(!shownHalf&&snap.tS>=HALF){
-      rotHTML+='<tr><td colspan="4" style="background:#fffbe0;text-align:center;font-weight:700;color:#b08000;padding:6px;letter-spacing:2px;border-top:2px solid #c8a000;border-bottom:2px solid #c8a000">HALFTIME</td></tr>';
+      rotHTML+='<tr><td colspan="5" style="background:#fffbe0;text-align:center;font-weight:700;color:#b08000;padding:6px;letter-spacing:2px;border-top:2px solid #c8a000;border-bottom:2px solid #c8a000">HALFTIME</td></tr>';
       shownHalf=true;
     }
 
-    // Who came IN and who went OUT
     var ns={};
     for(var i=0;i<snap.newIns.length;i++) ns[snap.newIns[i]]=true;
     var prevSnap = si>0?snapshots[si-1]:null;
@@ -788,25 +917,48 @@ function doPrint() {
       +'<td style="padding:5px 7px"><div style="width:'+Math.round(m/maxM*90)+'px;height:9px;background:'+col+';border-radius:3px;opacity:.75"></div></td></tr>';
   }
 
-  document.getElementById('overlayBody').innerHTML=
-    '<div style="border-bottom:2px solid #1a5c1a;padding-bottom:8px;margin-bottom:10px">'
-    +'<div style="font-size:14pt;font-weight:900;color:#1a5c1a">GAME DAY ROTATION</div>'
-    +'<div style="font-size:9pt;color:#555">'+now+' - '+avail.length+' players - MID '+mMin+'m - ATK '+aMin+'m - DEF '+dMin+'m - GK '+gMin+'m - Avg '+avg.toFixed(1)+'m</div></div>'
+  var headerHTML = '';
+  if(label) {
+    var lcol = label.indexOf('Absent') !== -1 ? '#cc3333' : '#1a7a1a';
+    headerHTML = '<div style="background:'+lcol+';color:#fff;padding:8px 12px;font-size:12pt;font-weight:700;letter-spacing:2px;margin:14px 0 8px;border-radius:4px">'+label+'</div>';
+  }
+
+  return headerHTML
+    +'<div style="font-size:9pt;color:#555;margin-bottom:8px">'+avail.length+' players - MID '+mMin+'m - ATK '+aMin+'m - DEF '+dMin+'m - GK '+gMin+'m - Avg '+avg.toFixed(1)+'m</div>'
     +'<h3>FIELD ROTATION (underline IN, strikethrough OUT)</h3>'
     +'<table><thead><tr><th style="'+th+'">TIME</th><th style="'+th+'">MIDFIELD</th><th style="'+th+'">ATTACK</th><th style="'+th+'">DEFENSE</th><th style="'+th+'">GK</th></tr></thead>'
     +'<tbody>'+rotHTML+'</tbody></table>'
     +'<h3 style="margin-top:14px">PLAYING TIME</h3>'
     +'<table><thead><tr><th style="'+th+'">PLAYER</th><th style="'+th+'">POS</th><th style="'+th+'">MIN</th><th style="'+th+'">BAR</th></tr></thead>'
-    +'<tbody>'+ptHTML+'</tbody></table>'
-    +'<p style="font-size:7pt;color:#888;margin-top:10px;border-top:1px solid #ddd;padding-top:6px">Game Day Rotation Manager - Equal time per position group - Avg: '+avg.toFixed(1)+' min</p>';
+    +'<tbody>'+ptHTML+'</tbody></table>';
+}
 
+function doPrint() {
+  if(!PLAN){alert('Build rotation first!');return;}
+  var now=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+
+  var bodyHTML = '<div style="border-bottom:2px solid #1a5c1a;padding-bottom:8px;margin-bottom:10px">'
+    +'<div style="font-size:14pt;font-weight:900;color:#1a5c1a">GAME DAY ROTATION</div>'
+    +'<div style="font-size:9pt;color:#555">'+now+'</div></div>';
+
+  if(PLAN_B) {
+    bodyHTML += buildPrintHTML(PLAN, 'ROTATION A \u2014 If Unconfirmed Player(s) Are Absent (' + UNCONF_NAMES.join(', ') + ')');
+    bodyHTML += '<hr style="border:none;border-top:3px dashed #c8a000;margin:16px 0">';
+    bodyHTML += buildPrintHTML(PLAN_B, 'ROTATION B \u2014 If Unconfirmed Player(s) Are Present (' + UNCONF_NAMES.join(', ') + ')');
+  } else {
+    bodyHTML += buildPrintHTML(PLAN, null);
+  }
+
+  bodyHTML += '<p style="font-size:7pt;color:#888;margin-top:10px;border-top:1px solid #ddd;padding-top:6px">Game Day Rotation Manager - Equal time per position group</p>';
+
+  document.getElementById('overlayBody').innerHTML = bodyHTML;
   document.getElementById('printOverlay').classList.add('show');
 }
 
-function copyText() {
-  if(!PLAN){alert('Build rotation first!');return;}
-  var snapshots=PLAN.snapshots, mins=PLAN.mins;
-  var t='GAME DAY ROTATION\n\n';
+// Build copy text for one plan
+function buildCopyTextForPlan(plan) {
+  var snapshots=plan.snapshots, mins=plan.mins;
+  var t='';
   for(var i=0;i<snapshots.length;i++){
     var s=snapshots[i];
     t+=fmt(s.tS)+' - '+fmt(s.tE)+'\n';
@@ -818,6 +970,22 @@ function copyText() {
   t+='PLAYING TIME\n';
   var keys=Object.keys(mins).sort(function(a,b){return mins[b]-mins[a];});
   for(var i=0;i<keys.length;i++) t+=keys[i]+': '+mins[keys[i]].toFixed(1)+' min\n';
+  return t;
+}
+
+function copyText() {
+  if(!PLAN){alert('Build rotation first!');return;}
+  var t='GAME DAY ROTATION\n\n';
+
+  if(PLAN_B) {
+    t+='=== ROTATION A \u2014 IF UNCONFIRMED ABSENT (' + UNCONF_NAMES.join(', ') + ') ===\n\n';
+    t+=buildCopyTextForPlan(PLAN);
+    t+='\n=== ROTATION B \u2014 IF UNCONFIRMED PRESENT (' + UNCONF_NAMES.join(', ') + ') ===\n\n';
+    t+=buildCopyTextForPlan(PLAN_B);
+  } else {
+    t+=buildCopyTextForPlan(PLAN);
+  }
+
   navigator.clipboard.writeText(t).then(function(){alert('Copied!');});
 }
 
